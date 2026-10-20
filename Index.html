@@ -1,0 +1,2395 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="Chat e compartilhamento de arquivos peer-to-peer" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <title>Chat P2P + Arquivos</title>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #334155;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --radius: 12px;
+      --shadow: 0 4px 20px rgba(0,0,0,.3);
+      --msg-me: #3b82f6;
+      --msg-them: #334155;
+      --input-bg: #0f172a;
+    }
+
+    body.light {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --surface2: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --msg-me: #2563eb;
+      --msg-them: #e2e8f0;
+      --input-bg: #f8fafc;
+      --shadow: 0 4px 20px rgba(0,0,0,.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.45;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    header {
+      background: var(--surface);
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--surface2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    header h1 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status {
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--surface2);
+      color: var(--text-muted);
+    }
+    .status.online { background: #14532d; color: #86efac; }
+    .status.connecting { background: #713f12; color: #fde68a; }
+
+    .connection-panel {
+      background: var(--surface);
+      padding: 16px;
+      border-bottom: 1px solid var(--surface2);
+      display: grid;
+      gap: 16px;
+    }
+
+    .id-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .id-box {
+      flex: 1;
+      min-width: 140px;
+      background: var(--bg);
+      border: 1px solid var(--surface2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: ui-monospace, monospace;
+      font-size: 0.9rem;
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      min-width: 140px;
+      background: var(--bg);
+      border: 1px solid var(--surface2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: var(--primary); }
+
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s;
+      white-space: nowrap;
+    }
+    button:hover { background: var(--primary-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: var(--surface2); }
+    button.secondary:hover { background: #475569; }
+    button.danger { background: var(--danger); }
+    button.danger:hover { background: #dc2626; }
+
+    .qr-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 8px;
+      background: var(--bg);
+      border-radius: 12px;
+      border: 1px solid var(--surface2);
+    }
+    .qr-section img#qrImage {
+      border-radius: 12px;
+      background: white;
+      padding: 12px;
+      width: 200px;
+      height: 200px;
+      max-width: 100%;
+      object-fit: contain;
+    }
+    .qr-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.3;
+    }
+    .qr-status {
+      font-size: 0.8rem;
+      color: #fbbf24;
+      text-align: center;
+      min-height: 1.2em;
+    }
+    .qr-status.ok { color: #86efac; }
+    .qr-status.error { color: #fca5a5; }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      max-width: 720px;
+      width: 100%;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: background 0.2s, outline 0.2s;
+    }
+
+    #messages.drag-over {
+      background: rgba(59, 130, 246, 0.12);
+      outline: 2px dashed var(--primary);
+      outline-offset: -8px;
+    }
+
+    .msg {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      word-break: break-word;
+      box-shadow: var(--shadow);
+    }
+    .msg.me {
+      align-self: flex-end;
+      background: var(--msg-me);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .msg.them {
+      align-self: flex-start;
+      background: var(--msg-them);
+      border-bottom-left-radius: 4px;
+    }
+    body.light .msg.them { color: #0f172a; }
+    .msg .status-ticks {
+      font-size: 0.7rem;
+      opacity: 0.85;
+      margin-left: 6px;
+    }
+    .msg strong { font-weight: 700; }
+    .msg em { font-style: italic; }
+    .msg code {
+      font-family: ui-monospace, monospace;
+      background: rgba(0,0,0,.25);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 0.88em;
+    }
+    body.light .msg code { background: rgba(0,0,0,.08); }
+    .msg.system {
+      align-self: center;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      box-shadow: none;
+      padding: 4px 8px;
+    }
+    .msg .time {
+      display: block;
+      font-size: 0.7rem;
+      opacity: 0.7;
+      margin-top: 4px;
+    }
+    .msg.file {
+      background: var(--surface);
+      border: 1px solid var(--surface2);
+      max-width: 300px;
+    }
+    .msg.file a {
+      color: #93c5fd;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .msg.file a:hover { text-decoration: underline; }
+
+    .msg.file img.preview {
+      display: block;
+      max-width: 100%;
+      max-height: 260px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      object-fit: contain;
+      background: #000;
+    }
+
+    .msg audio {
+      width: 100%;
+      margin-top: 8px;
+      outline: none;
+    }
+
+    .progress-wrap {
+      margin: 8px 0 4px;
+      background: var(--bg);
+      border-radius: 999px;
+      height: 8px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: var(--primary);
+      width: 0%;
+      transition: width 0.15s ease;
+      border-radius: 999px;
+    }
+    .progress-text {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .typing-indicator {
+      padding: 4px 16px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-style: italic;
+      min-height: 1.4em;
+      background: var(--surface);
+    }
+
+    .emoji-bar {
+      display: flex;
+      gap: 4px;
+      padding: 6px 12px 0;
+      background: var(--surface);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .emoji-bar button {
+      background: transparent;
+      border: none;
+      font-size: 1.35rem;
+      padding: 4px 6px;
+      cursor: pointer;
+      line-height: 1;
+      border-radius: 8px;
+      width: auto;
+      min-width: 36px;
+    }
+    .emoji-bar button:hover { background: var(--surface2); }
+
+    /* COMPOSER ATUALIZADO (RESPONSIVO E COM ÁUDIO) */
+    .composer {
+      padding: 8px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+      background: var(--surface);
+      border-top: 1px solid var(--surface2);
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      flex-wrap: wrap; /* Adaptação mobile */
+    }
+
+    .composer-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .composer-input-area {
+      flex: 1;
+      display: flex;
+      min-width: 200px;
+    }
+
+    #textInput {
+      width: 100%;
+      resize: none;
+      background: var(--input-bg);
+      border: 1px solid var(--surface2);
+      border-radius: 14px;
+      padding: 14px 16px;
+      color: var(--text);
+      font-size: 16px; /* evita zoom no iOS */
+      min-height: 48px;
+      max-height: 140px;
+      outline: none;
+      font-family: inherit;
+      line-height: 1.4;
+    }
+    #textInput:focus { border-color: var(--primary); }
+
+    .icon-btn {
+      min-width: 48px;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      padding: 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .icon-btn.recording {
+      background: var(--danger);
+      animation: pulse-rec 1.5s infinite;
+    }
+    @keyframes pulse-rec {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    .icon-btn input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    #sendBtn {
+      min-width: 64px;
+      min-height: 48px;
+      font-size: 1rem;
+    }
+
+    .files-panel {
+      background: var(--surface);
+      border-top: 1px solid var(--surface2);
+      padding: 12px 16px;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+    .files-panel h3 {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--bg);
+      border-radius: 8px;
+      margin-bottom: 6px;
+      font-size: 0.85rem;
+    }
+    .file-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-item button { padding: 6px 10px; font-size: 0.8rem; }
+
+    .hidden { display: none !important; }
+
+    .drop-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      z-index: 20;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      pointer-events: none;
+    }
+    .drop-overlay.visible { display: flex; }
+    .drop-overlay span {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .history-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      padding: 8px 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--surface2);
+    }
+    .history-actions button {
+      font-size: 0.8rem;
+      padding: 6px 12px;
+    }
+
+    /* ===== Chamadas voz/vídeo ===== */
+    .call-actions {
+      display: flex;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--surface2);
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .call-actions button {
+      min-width: 44px;
+      padding: 10px 14px;
+    }
+    .call-actions button:disabled { opacity: 0.4; }
+
+    .call-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: #0f172a;
+      flex-direction: column;
+    }
+    .call-overlay.active { display: flex; }
+
+    .call-videos {
+      flex: 1;
+      position: relative;
+      background: #000;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #remoteVideo {
+      width: 100%;
+      height: 100%;
+      object-fit: contain; /* Padrão agora é contain (tela toda) */
+      background: #111;
+      transition: object-fit 0.3s;
+    }
+    #localVideo {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      width: 28%;
+      max-width: 160px;
+      aspect-ratio: 3/4;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 2px solid rgba(255,255,255,.3);
+      background: #222;
+      z-index: 2;
+    }
+
+    /* Controles Flutuantes do Vídeo */
+    .video-controls-overlay {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: flex;
+      gap: 8px;
+      z-index: 10;
+    }
+    .video-controls-overlay button {
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      backdrop-filter: blur(4px);
+    }
+    .video-controls-overlay button:hover {
+      background: rgba(0, 0, 0, 0.8);
+    }
+
+    .call-overlay.audio-only #localVideo,
+    .call-overlay.audio-only #remoteVideo,
+    .call-overlay.audio-only .video-controls-overlay {
+      display: none;
+    }
+    .call-audio-avatar {
+      display: none;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      color: #fff;
+    }
+    .call-overlay.audio-only .call-audio-avatar { display: flex; }
+    .call-audio-avatar .avatar-circle {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+    }
+
+    .call-bar {
+      padding: 16px;
+      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+      background: rgba(15,23,42,.95);
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .call-bar button {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      font-size: 1.3rem;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .call-bar .hangup { background: var(--danger); }
+    .call-bar .hangup:hover { background: #dc2626; }
+    .call-status-label {
+      text-align: center;
+      color: #94a3b8;
+      font-size: 0.85rem;
+      padding: 8px;
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(0,0,0,0.6);
+      border-radius: 8px;
+      z-index: 10;
+    }
+
+    .incoming-call {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 110;
+      background: rgba(0,0,0,.75);
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .incoming-call.active { display: flex; }
+    .incoming-card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 28px 24px;
+      text-align: center;
+      max-width: 320px;
+      width: 100%;
+      box-shadow: var(--shadow);
+    }
+    .incoming-card h2 { font-size: 1.2rem; margin-bottom: 8px; }
+    .incoming-card p { color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem; }
+    .incoming-btns { display: flex; gap: 12px; justify-content: center; }
+    .incoming-btns button { min-width: 100px; padding: 12px 16px; }
+
+    @media (max-width: 480px) {
+      .id-row { flex-direction: column; align-items: stretch; }
+      .id-row button { width: 100%; }
+      .composer { flex-direction: column; align-items: stretch; }
+      .composer-input-area { order: -1; }
+      .composer-actions { justify-content: space-between; }
+      .composer-actions button { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>💬 Chat P2P 1.7</h1>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <button class="secondary" id="themeBtn" type="button" title="Alternar tema" style="padding:6px 10px;font-size:0.85rem;">🌙</button>
+      <button class="secondary" id="notifyBtn" type="button" title="Ativar notificações" style="padding:6px 10px;font-size:0.85rem;">🔔</button>
+      <button class="secondary hidden" id="installBtn" type="button" style="padding:6px 10px;font-size:0.85rem;">Instalar app</button>
+      <div id="status" class="status">Desconectado</div>
+    </div>
+  </header>
+
+  <!-- Overlay de chamada -->
+  <div class="call-overlay" id="callOverlay">
+    <div class="call-videos" id="videoContainer">
+      <div class="call-status-label" id="callStatusLabel">Chamando…</div>
+      
+      <!-- CONTROLES DA TELA COMPARTILHADA -->
+      <div class="video-controls-overlay">
+        <button type="button" id="btnFullscreen" title="Tela Cheia">⛶</button>
+        <button type="button" id="btnFitMode" title="Ajustar / Preencher">↔️</button>
+        <button type="button" id="btnToggleCam" title="Ocultar/Mostrar Câmera">📷</button>
+      </div>
+
+      <video id="remoteVideo" autoplay playsinline></video>
+      <video id="localVideo" autoplay playsinline muted></video>
+      
+      <div class="call-audio-avatar">
+        <div class="avatar-circle">📞</div>
+        <div id="audioCallPeer">Chamada de voz</div>
+      </div>
+    </div>
+    <div class="call-bar">
+      <button type="button" class="secondary" id="muteBtn" title="Mudo">🎤</button>
+      <button type="button" class="secondary" id="camBtn" title="Câmera">📷</button>
+      <button type="button" class="secondary" id="screenBtn" title="Compartilhar tela">🖥️</button>
+      <button type="button" class="hangup" id="hangupBtn" title="Desligar">📵</button>
+    </div>
+  </div>
+
+  <!-- Chamada recebida -->
+  <div class="incoming-call" id="incomingCall">
+    <div class="incoming-card">
+      <h2 id="incomingTitle">Chamada recebida</h2>
+      <p id="incomingDesc">de alguém</p>
+      <div class="incoming-btns">
+        <button type="button" class="danger" id="rejectCallBtn">Recusar</button>
+        <button type="button" id="acceptCallBtn">Atender</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="connection-panel" id="connectionPanel">
+    <div>
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">Seu ID atual</div>
+      <div class="id-row">
+        <div class="id-box" id="myId">Gerando...</div>
+        <button class="secondary" id="copyIdBtn" type="button">Copiar ID</button>
+        <button class="secondary" id="copyLinkBtn" type="button">Copiar link</button>
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">Escolher meu ID (opcional)</div>
+      <div class="id-row">
+        <input type="text" id="customIdInput" placeholder="ex: joao2026" maxlength="30" autocomplete="off" />
+        <button id="setIdBtn" type="button">Definir ID</button>
+      </div>
+      <div class="hint">Use apenas letras, números, hífen e underline. Se já estiver em uso, vai dar erro.</div>
+    </div>
+
+    <div class="qr-section">
+      <img id="qrImage" src="" alt="QR Code" width="200" height="200" />
+      <div class="qr-label">Escaneie com a câmera do amigo<br>para abrir o chat já com seu ID</div>
+      <div class="qr-status" id="qrStatus">Aguardando ID...</div>
+      <button class="secondary" id="regenQrBtn" type="button" style="font-size:0.8rem;padding:6px 12px;">Gerar QR novamente</button>
+    </div>
+
+    <div>
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">ID do amigo</div>
+      <div class="id-row">
+        <input type="text" id="peerIdInput" placeholder="Cole o ID ou abra o link dele" autocomplete="off" />
+        <button id="connectBtn" type="button">Conectar</button>
+        <button class="danger hidden" id="disconnectBtn" type="button">Desconectar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div id="messages"></div>
+
+    <div class="drop-overlay" id="dropOverlay">
+      <span>📁 Solte o arquivo aqui</span>
+      <div style="font-size:0.9rem;color:var(--text-muted)">Solte para enviar</div>
+    </div>
+
+    <div class="files-panel hidden" id="filesPanel">
+      <h3>Arquivos desta sessão</h3>
+      <div id="filesList"></div>
+    </div>
+
+    <div class="call-actions">
+      <button type="button" id="voiceCallBtn" disabled title="Chamada de voz">📞 Voz</button>
+      <button type="button" id="videoCallBtn" disabled title="Chamada de vídeo">📹 Vídeo</button>
+      <button type="button" id="screenCallBtn" disabled title="Compartilhar tela">🖥️ Tela</button>
+      <button class="secondary" id="clearHistoryBtn" type="button">Limpar histórico</button>
+    </div>
+
+    <div class="typing-indicator" id="typingIndicator"></div>
+
+    <div class="emoji-bar" id="emojiBar">
+      <button type="button" data-emoji="😀">😀</button>
+      <button type="button" data-emoji="😂">😂</button>
+      <button type="button" data-emoji="❤️">❤️</button>
+      <button type="button" data-emoji="👍">👍</button>
+      <button type="button" data-emoji="🔥">🔥</button>
+      <button type="button" data-emoji="🎉">🎉</button>
+      <button type="button" data-emoji="😮">😮</button>
+      <button type="button" data-emoji="🙏">🙏</button>
+    </div>
+
+    <!-- NOVO COMPOSER -->
+    <div class="composer">
+      <div class="composer-input-area">
+        <textarea id="textInput" rows="1" placeholder="Digite uma mensagem..." disabled></textarea>
+      </div>
+      <div class="composer-actions">
+        <button class="icon-btn secondary" id="voiceRecordBtn" type="button" title="Gravar áudio" disabled>🎤</button>
+        <button class="icon-btn secondary" id="fileBtn" type="button" title="Enviar arquivo" disabled>
+          📎
+          <input type="file" id="fileInput" multiple />
+        </button>
+        <button id="sendBtn" type="button" disabled>Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============ Configuração ============
+    const CHUNK_SIZE = 64 * 1024;
+    const HISTORY_KEY = "p2p_chat_history_v1";
+    const MAX_HISTORY = 150;
+
+    // ============ Estado ============
+    let peer = null;
+    let conn = null;
+    let myId = null;
+    const sessionFiles = [];
+    const incomingFiles = new Map();
+    let messageHistory = [];
+    let typingTimeout = null;
+    let lastTypingSent = 0;
+    let deferredInstallPrompt = null;
+
+    // Reconexão inteligente
+    const LAST_PEER_KEY = "p2p_last_peer";
+    const LAST_MY_ID_KEY = "p2p_last_my_id";
+    let intentionalDisconnect = false;
+    let reconnectAttempts = 0;
+    let reconnectTimer = null;
+    const MAX_RECONNECT = 10;
+
+    // ============ Elementos ============
+    const $ = id => document.getElementById(id);
+    const statusEl = $("status");
+    const myIdEl = $("myId");
+    const peerIdInput = $("peerIdInput");
+    const connectBtn = $("connectBtn");
+    const disconnectBtn = $("disconnectBtn");
+    const copyIdBtn = $("copyIdBtn");
+    const copyLinkBtn = $("copyLinkBtn");
+    const customIdInput = $("customIdInput");
+    const setIdBtn = $("setIdBtn");
+    const messagesEl = $("messages");
+    const textInput = $("textInput");
+    const sendBtn = $("sendBtn");
+    const fileInput = $("fileInput");
+    const fileBtn = $("fileBtn");
+    const voiceRecordBtn = $("voiceRecordBtn");
+    const filesPanel = $("filesPanel");
+    const filesList = $("filesList");
+    const qrImage = $("qrImage");
+    const qrStatus = $("qrStatus");
+    const regenQrBtn = $("regenQrBtn");
+    const dropOverlay = $("dropOverlay");
+    const clearHistoryBtn = $("clearHistoryBtn");
+    const typingIndicator = $("typingIndicator");
+    const themeBtn = $("themeBtn");
+    const installBtn = $("installBtn");
+    const notifyBtn = $("notifyBtn");
+    const emojiBar = $("emojiBar");
+    const voiceCallBtn = $("voiceCallBtn");
+    const videoCallBtn = $("videoCallBtn");
+    const screenCallBtn = $("screenCallBtn");
+    const callOverlay = $("callOverlay");
+    const incomingCallEl = $("incomingCall");
+    const remoteVideo = $("remoteVideo");
+    const localVideo = $("localVideo");
+    const callStatusLabel = $("callStatusLabel");
+    const muteBtn = $("muteBtn");
+    const camBtn = $("camBtn");
+    const screenBtn = $("screenBtn");
+    const hangupBtn = $("hangupBtn");
+    const acceptCallBtn = $("acceptCallBtn");
+    const rejectCallBtn = $("rejectCallBtn");
+    const incomingTitle = $("incomingTitle");
+    const incomingDesc = $("incomingDesc");
+    const audioCallPeer = $("audioCallPeer");
+    const btnFullscreen = $("btnFullscreen");
+    const btnFitMode = $("btnFitMode");
+    const btnToggleCam = $("btnToggleCam");
+    const videoContainer = $("videoContainer");
+
+    // Estado de chamada
+    let localStream = null;
+    let screenStream = null;
+    let cameraStream = null;
+    let currentCall = null;
+    let pendingCall = null;
+    let isMuted = false;
+    let camOff = false;
+    let sharingScreen = false;
+    let callIsVideo = true;
+    let isFitMode = true; // true = contain, false = cover
+    let mediaRecorder = null;
+    let audioChunks = [];
+
+    // ============ Histórico local ============
+    function loadHistory() {
+      try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        if (raw) {
+          messageHistory = JSON.parse(raw);
+          renderHistory();
+        }
+      } catch (e) {
+        console.warn("Erro ao carregar histórico", e);
+        messageHistory = [];
+      }
+    }
+
+    function saveHistory() {
+      try {
+        if (messageHistory.length > MAX_HISTORY) {
+          messageHistory = messageHistory.slice(-MAX_HISTORY);
+        }
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(messageHistory));
+      } catch (e) {
+        console.warn("Erro ao salvar histórico", e);
+      }
+    }
+
+    function addToHistory(entry) {
+      messageHistory.push(entry);
+      saveHistory();
+    }
+
+    function renderHistory() {
+      messagesEl.innerHTML = "";
+      messageHistory.forEach(entry => {
+        if (entry.type === "text") {
+          renderTextMessage(entry.text, entry.who, entry.time, false, entry.status || "");
+        } else if (entry.type === "file") {
+          renderFilePlaceholder(entry.who, entry.fileName, entry.fileSize, entry.time);
+        } else if (entry.type === "system") {
+          renderSystemMessage(entry.text, false);
+        }
+      });
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function clearHistory() {
+      if (!confirm("Tem certeza que deseja apagar todo o histórico de mensagens?")) return;
+      messageHistory = [];
+      localStorage.removeItem(HISTORY_KEY);
+      messagesEl.innerHTML = "";
+      renderSystemMessage("Histórico limpo.", true);
+    }
+
+    // ============ Som ============
+    function playNotificationSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.3);
+      } catch (e) {}
+    }
+
+    // ============ Notificações ============
+    function notificationsSupported() {
+      return "Notification" in window;
+    }
+
+    function updateNotifyBtn() {
+      if (!notifyBtn || !notificationsSupported()) return;
+      const perm = Notification.permission;
+      if (perm === "granted") {
+        notifyBtn.textContent = "🔔✓";
+        notifyBtn.title = "Notificações ativas";
+      } else if (perm === "denied") {
+        notifyBtn.textContent = "🔔✕";
+        notifyBtn.title = "Notificações bloqueadas nas configurações";
+      } else {
+        notifyBtn.textContent = "🔔";
+        notifyBtn.title = "Ativar notificações";
+      }
+    }
+
+    async function requestNotificationPermission() {
+      if (!notificationsSupported()) {
+        alert("Este navegador não suporta notificações.");
+        return false;
+      }
+      if (Notification.permission === "granted") {
+        updateNotifyBtn();
+        renderSystemMessage("Notificações já estão ativas.", true);
+        return true;
+      }
+      if (Notification.permission === "denied") {
+        alert("Notificações bloqueadas. Ative nas configurações do navegador/site.");
+        updateNotifyBtn();
+        return false;
+      }
+      const result = await Notification.requestPermission();
+      updateNotifyBtn();
+      if (result === "granted") {
+        renderSystemMessage("Notificações ativadas. Você será avisado com o app em segundo plano.", true);
+        showLocalNotification("Chat P2P", "Notificações funcionando!", "test");
+        return true;
+      }
+      renderSystemMessage("Permissão de notificação negada.", true);
+      return false;
+    }
+
+    function showLocalNotification(title, body, tag) {
+      if (!notificationsSupported() || Notification.permission !== "granted") return;
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: "notify",
+          title: title,
+          body: body,
+          tag: tag || "chat-p2p",
+          url: window.location.href.split("?")[0]
+        });
+        return;
+      }
+      try {
+        const n = new Notification(title, {
+          body: body,
+          icon: "./icon-192.png",
+          tag: tag || "chat-p2p"
+        });
+        n.onclick = () => {
+          window.focus();
+          n.close();
+        };
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
+    function notifyIfBackground(title, body, tag) {
+      playNotificationSound();
+      if (document.hidden || !document.hasFocus()) {
+        showLocalNotification(title, body, tag);
+      }
+      try {
+        if (navigator.setAppBadge) navigator.setAppBadge(1);
+      } catch (e) {}
+    }
+
+    if (notifyBtn) {
+      notifyBtn.addEventListener("click", () => requestNotificationPermission());
+      updateNotifyBtn();
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        try {
+          if (navigator.clearAppBadge) navigator.clearAppBadge();
+        } catch (e) {}
+      }
+    });
+
+    // ============ Helpers de UI ============
+    function setStatus(text, type = "") {
+      statusEl.textContent = text;
+      statusEl.className = "status " + type;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + " B";
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+      return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    }
+
+    function nowTime() {
+      return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function enableChat(enabled) {
+      textInput.disabled = !enabled;
+      sendBtn.disabled = !enabled;
+      fileBtn.disabled = !enabled;
+      voiceRecordBtn.disabled = !enabled;
+      if (voiceCallBtn) voiceCallBtn.disabled = !enabled;
+      if (videoCallBtn) videoCallBtn.disabled = !enabled;
+      if (screenCallBtn) screenCallBtn.disabled = !enabled;
+      if (enabled) textInput.focus();
+    }
+
+    function updateFilesList() {
+      if (sessionFiles.length === 0) {
+        filesPanel.classList.add("hidden");
+        return;
+      }
+      filesPanel.classList.remove("hidden");
+      filesList.innerHTML = "";
+      sessionFiles.forEach((f) => {
+        const item = document.createElement("div");
+        item.className = "file-item";
+        const dir = f.direction === "out" ? "↑ enviado" : "↓ recebido";
+        item.innerHTML = `
+          <span title="${escapeHtml(f.name)}">${dir}: ${escapeHtml(f.name)} (${formatSize(f.size)})</span>
+          <a href="${f.url}" download="${escapeHtml(f.name)}">
+            <button type="button" class="secondary">Baixar</button>
+          </a>
+        `;
+        filesList.appendChild(item);
+      });
+    }
+
+    function formatMarkdown(text) {
+      let s = escapeHtml(text);
+      s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+      s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+      return s;
+    }
+
+    function applyTheme(light) {
+      document.body.classList.toggle("light", light);
+      if (themeBtn) themeBtn.textContent = light ? "☀️" : "🌙";
+      try { localStorage.setItem("p2p_theme", light ? "light" : "dark"); } catch (e) {}
+    }
+
+    try {
+      if (localStorage.getItem("p2p_theme") === "light") applyTheme(true);
+    } catch (e) {}
+
+    if (themeBtn) {
+      themeBtn.addEventListener("click", () => {
+        applyTheme(!document.body.classList.contains("light"));
+      });
+    }
+
+    if (emojiBar) {
+      emojiBar.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-emoji]");
+        if (!btn || textInput.disabled) return;
+        const emoji = btn.getAttribute("data-emoji");
+        const start = textInput.selectionStart || textInput.value.length;
+        const end = textInput.selectionEnd || textInput.value.length;
+        const v = textInput.value;
+        textInput.value = v.slice(0, start) + emoji + v.slice(end);
+        textInput.focus();
+        textInput.selectionStart = textInput.selectionEnd = start + emoji.length;
+        textInput.dispatchEvent(new Event("input"));
+      });
+    }
+
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      if (installBtn) installBtn.classList.remove("hidden");
+    });
+    if (installBtn) {
+      installBtn.addEventListener("click", async () => {
+        if (!deferredInstallPrompt) return;
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+        installBtn.classList.add("hidden");
+      });
+    }
+
+    function getShareUrl() {
+      const url = new URL(window.location.href);
+      url.search = "";
+      url.searchParams.set("peer", myId);
+      return url.toString();
+    }
+
+    function setQrStatus(text, type = "") {
+      if (!qrStatus) return;
+      qrStatus.textContent = text;
+      qrStatus.className = "qr-status" + (type ? " " + type : "");
+    }
+
+    function generateQR(id) {
+      if (!id) {
+        setQrStatus("Aguardando ID...", "");
+        if (qrImage) qrImage.removeAttribute("src");
+        return;
+      }
+      const shareUrl = getShareUrl();
+      setQrStatus("Gerando QR...", "");
+      const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=" + encodeURIComponent(shareUrl);
+      if (qrImage) {
+        qrImage.onload = () => setQrStatus("QR pronto — pode escanear", "ok");
+        qrImage.onerror = () => {
+          setQrStatus("Falha ao carregar QR. Use \"Copiar link\".", "error");
+        };
+        qrImage.src = qrUrl;
+      }
+    }
+
+    if (regenQrBtn) {
+      regenQrBtn.addEventListener("click", () => {
+        if (myId) generateQR(myId);
+        else setQrStatus("Ainda não tem ID. Aguarde...", "");
+      });
+    }
+
+    // ============ Renderização de mensagens ============
+    function renderTextMessage(text, who, time, save = true, status = "", msgId = null) {
+      const div = document.createElement("div");
+      div.className = `msg ${who}`;
+      if (msgId) div.dataset.msgId = msgId;
+      const ticks = who === "me" && status ? `<span class="status-ticks">${status}</span>` : "";
+      div.innerHTML = `${formatMarkdown(text)}<span class="time">${time}${ticks}</span>`;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      if (save) {
+        addToHistory({ type: "text", who, text, time, status, msgId });
+      }
+      return div;
+    }
+
+    function markDelivered(msgId) {
+      if (!msgId) return;
+      const el = messagesEl.querySelector(`[data-msg-id="${CSS.escape(msgId)}"] .status-ticks`);
+      if (el) el.textContent = "✓✓";
+    }
+
+    function renderSystemMessage(text, save = true) {
+      const div = document.createElement("div");
+      div.className = "msg system";
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      if (save) {
+        addToHistory({ type: "system", text, time: nowTime() });
+      }
+    }
+
+    function renderFilePlaceholder(who, fileName, fileSize, time) {
+      const div = document.createElement("div");
+      div.className = `msg ${who} file`;
+      div.innerHTML = `
+        📄 <strong>${escapeHtml(fileName)}</strong>
+        <div style="font-size:0.8rem;opacity:.8;margin:4px 0">${formatSize(fileSize)} — conteúdo não disponível após recarregar</div>
+        <span class="time">${time}</span>
+      `;
+      messagesEl.appendChild(div);
+    }
+
+    function createProgressMessage(who, fileName, totalSize) {
+      const div = document.createElement("div");
+      div.className = `msg ${who} file`;
+      div.innerHTML = `
+        📄 <strong>${escapeHtml(fileName)}</strong>
+        <div class="progress-wrap"><div class="progress-bar"></div></div>
+        <div class="progress-text">0% — ${formatSize(0)} / ${formatSize(totalSize)}</div>
+        <span class="time">${nowTime()}</span>
+      `;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return {
+        el: div,
+        bar: div.querySelector(".progress-bar"),
+        text: div.querySelector(".progress-text")
+      };
+    }
+
+    function updateProgress(progressObj, loaded, total) {
+      const pct = Math.min(100, Math.round((loaded / total) * 100));
+      progressObj.bar.style.width = pct + "%";
+      progressObj.text.textContent = `${pct}% — ${formatSize(loaded)} / ${formatSize(total)}`;
+    }
+
+    function finalizeFileMessage(progressObj, fileObj, who) {
+      const isImage = fileObj.mime && fileObj.mime.startsWith("image/");
+      const isAudio = fileObj.mime && fileObj.mime.startsWith("audio/");
+      const isPdf = fileObj.mime === "application/pdf" || /\.pdf$/i.test(fileObj.name || "");
+      let previewHtml = "";
+      
+      if (isImage) {
+        previewHtml = `<img class="preview" src="${fileObj.url}" alt="${escapeHtml(fileObj.name)}" title="Clique para baixar" />`;
+      } else if (isAudio) {
+        previewHtml = `<audio controls src="${fileObj.url}"></audio>`;
+      } else if (isPdf && fileObj.size < 15 * 1024 * 1024) {
+        previewHtml = `<iframe class="preview" src="${fileObj.url}" title="${escapeHtml(fileObj.name)}" style="width:100%;height:220px;border:none;border-radius:8px;background:#fff;margin-bottom:8px;"></iframe>`;
+      }
+
+      progressObj.el.innerHTML = `
+        ${previewHtml}
+        📄 <strong>${escapeHtml(fileObj.name)}</strong>
+        <div style="font-size:0.8rem;opacity:.8;margin:4px 0">${formatSize(fileObj.size)}</div>
+        <a href="${fileObj.url}" download="${escapeHtml(fileObj.name)}">Baixar arquivo</a>
+        <span class="time">${nowTime()}</span>
+      `;
+
+      if (isImage) {
+        const img = progressObj.el.querySelector("img.preview");
+        if (img) {
+          img.addEventListener("click", () => {
+            const a = document.createElement("a");
+            a.href = fileObj.url;
+            a.download = fileObj.name;
+            a.click();
+          });
+        }
+      }
+
+      addToHistory({
+        type: "file",
+        who,
+        fileName: fileObj.name,
+        fileSize: fileObj.size,
+        time: nowTime()
+      });
+    }
+
+    // ============ Envio de arquivo ============
+    async function sendFile(file) {
+      if (!file || !conn || !conn.open) return;
+      if (file.size > 100 * 1024 * 1024) {
+        alert("Arquivo muito grande (máx. recomendado 100 MB).");
+        return;
+      }
+
+      const fileId = "f_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+      const mime = file.type || "application/octet-stream";
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      const progress = createProgressMessage("me", file.name, file.size);
+
+      conn.send(JSON.stringify({
+        type: "file-meta",
+        id: fileId,
+        name: file.name,
+        size: file.size,
+        mime: mime,
+        totalChunks: totalChunks
+      }));
+
+      const buffer = await file.arrayBuffer();
+      let offset = 0;
+      let sent = 0;
+
+      for (let i = 0; i < totalChunks; i++) {
+        const end = Math.min(offset + CHUNK_SIZE, buffer.byteLength);
+        const chunk = buffer.slice(offset, end);
+
+        conn.send(JSON.stringify({
+          type: "file-chunk-info",
+          id: fileId,
+          index: i
+        }));
+        conn.send(chunk);
+
+        sent += chunk.byteLength;
+        updateProgress(progress, sent, file.size);
+        offset = end;
+
+        if (i % 5 === 0) await new Promise(r => setTimeout(r, 10));
+      }
+
+      const url = URL.createObjectURL(file);
+      const fileObj = { name: file.name, blob: file, url, size: file.size, mime };
+      sessionFiles.push({ name: file.name, url, size: file.size, direction: "out" });
+      finalizeFileMessage(progress, fileObj, "me");
+      updateFilesList();
+    }
+
+    // ============ Gravação de Áudio ============
+    if (voiceRecordBtn) {
+      voiceRecordBtn.addEventListener("click", async () => {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+          voiceRecordBtn.classList.remove("recording");
+          voiceRecordBtn.innerHTML = "🎤";
+        } else {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            
+            mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+            mediaRecorder.onstop = () => {
+              const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+              const file = new File([audioBlob], `Audio_${nowTime().replace(":", "-")}.webm`, { type: 'audio/webm' });
+              sendFile(file);
+              stream.getTracks().forEach(t => t.stop());
+            };
+            
+            mediaRecorder.start();
+            voiceRecordBtn.classList.add("recording");
+            voiceRecordBtn.innerHTML = "⏹️";
+          } catch (err) {
+            alert("Não foi possível acessar o microfone para gravar áudio.");
+          }
+        }
+      });
+    }
+
+    // ============ Chamadas voz / vídeo / tela ============
+    async function getMedia(mode) {
+      if (mode === "screen") {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+          if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+            throw new Error("Navegadores de celular não permitem compartilhar a tela. Use um computador.");
+          }
+          throw new Error("Seu navegador não suporta compartilhar tela.");
+        }
+        
+        // 1. Captura a tela E tenta pegar o áudio do sistema
+        const display = await navigator.mediaDevices.getDisplayMedia({
+          video: { cursor: "always" },
+          audio: { systemAudio: "include" }
+        });
+        
+        // 2. Tenta capturar o microfone separadamente
+        let mic = null;
+        try {
+          mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        } catch (e) {
+          console.warn("Sem microfone na partilha de tela:", e);
+        }
+
+        const combined = new MediaStream();
+        display.getVideoTracks().forEach(t => combined.addTrack(t));
+
+        // 3. MISTURA OS ÁUDIOS (Sistema + Microfone) usando Web Audio API
+        if (display.getAudioTracks().length > 0 || mic) {
+          try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const dest = audioContext.createMediaStreamDestination();
+            
+            if (display.getAudioTracks().length > 0) {
+              const sysSource = audioContext.createMediaStreamSource(display);
+              sysSource.connect(dest);
+            }
+            if (mic) {
+              const micSource = audioContext.createMediaStreamSource(mic);
+              micSource.connect(dest);
+            }
+            
+            dest.stream.getAudioTracks().forEach(t => combined.addTrack(t));
+          } catch (e) {
+             console.warn("Erro ao misturar áudios", e);
+             // Fallback: envia o que tiver
+             if (mic && mic.getAudioTracks().length) mic.getAudioTracks().forEach(t => combined.addTrack(t));
+             else display.getAudioTracks().forEach(t => combined.addTrack(t));
+          }
+        }
+
+        screenStream = display;
+        if (mic) cameraStream = mic;
+        const screenTrack = display.getVideoTracks()[0];
+        if (screenTrack) {
+          screenTrack.onended = () => {
+            if (sharingScreen && currentCall) {
+              stopScreenShare(true).catch(() => endCall(true));
+            } else if (sharingScreen) {
+              endCall(true);
+            }
+          };
+        }
+        return combined;
+      }
+      
+      // Chamadas normais de vídeo/voz com Tratamento de Erro (Legion Go)
+      try {
+        const constraints = {
+          audio: true,
+          video: mode === "video" ? { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } : false
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (mode === "video") cameraStream = stream;
+        return stream;
+      } catch (error) {
+        console.warn("Erro ao buscar mídia:", error);
+        if (mode === "video" && (error.name === "NotFoundError" || error.name === "DevicesNotFoundError")) {
+          // Se não achou câmera, tenta só áudio
+          alert("Câmera não encontrada. Iniciando apenas com áudio.");
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          return audioStream;
+        }
+        throw error;
+      }
+    }
+
+    function stopLocalStream() {
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+      }
+      if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+        screenStream = null;
+      }
+      if (cameraStream && cameraStream !== localStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+        cameraStream = null;
+      }
+      sharingScreen = false;
+      if (localVideo) localVideo.srcObject = null;
+      if (remoteVideo) remoteVideo.srcObject = null;
+    }
+
+    function showCallUI(hasVideo, statusText) {
+      callIsVideo = hasVideo;
+      if (callOverlay) {
+        callOverlay.classList.add("active");
+        callOverlay.classList.toggle("audio-only", !hasVideo);
+      }
+      if (callStatusLabel) callStatusLabel.textContent = statusText || (hasVideo ? "Chamada de vídeo" : "Chamada de voz");
+      if (camBtn) camBtn.style.display = hasVideo && !sharingScreen ? "" : (hasVideo ? "" : "none");
+      if (screenBtn) screenBtn.style.display = hasVideo || currentCall ? "" : "none";
+      if (audioCallPeer) audioCallPeer.textContent = (peerIdInput && peerIdInput.value) ? peerIdInput.value : "Amigo";
+      updateScreenBtnLabel();
+    }
+
+    function updateScreenBtnLabel() {
+      if (!screenBtn) return;
+      screenBtn.textContent = sharingScreen ? "🛑" : "🖥️";
+      screenBtn.title = sharingScreen ? "Parar tela / voltar câmera" : "Compartilhar tela";
+    }
+
+    function hideCallUI() {
+      if (callOverlay) callOverlay.classList.remove("active");
+      if (incomingCallEl) incomingCallEl.classList.remove("active");
+      pendingCall = null;
+    }
+
+    function endCall(notifyPeer) {
+      if (currentCall) {
+        try { currentCall.close(); } catch (e) {}
+        currentCall = null;
+      }
+      if (pendingCall) {
+        try { pendingCall.close(); } catch (e) {}
+        pendingCall = null;
+      }
+      stopLocalStream();
+      hideCallUI();
+      isMuted = false;
+      camOff = false;
+      sharingScreen = false;
+      if (muteBtn) muteBtn.textContent = "🎤";
+      if (camBtn) camBtn.textContent = "📷";
+      updateScreenBtnLabel();
+      if (notifyPeer && conn && conn.open) {
+        try { conn.send(JSON.stringify({ type: "call-end" })); } catch (e) {}
+      }
+      renderSystemMessage("Chamada encerrada", true);
+    }
+
+    async function replaceVideoTrack(newTrack) {
+      if (!currentCall || !currentCall.peerConnection) return false;
+      const pc = currentCall.peerConnection;
+      const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
+      if (sender && newTrack) {
+        await sender.replaceTrack(newTrack);
+        return true;
+      }
+      if (newTrack && pc.addTrack) {
+        try {
+          pc.addTrack(newTrack, localStream || new MediaStream([newTrack]));
+          return true;
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+      return false;
+    }
+
+    async function startScreenShareInCall() {
+      if (!currentCall) {
+        alert("Inicie uma chamada primeiro, ou use o botão Tela.");
+        return;
+      }
+      try {
+        const display = await navigator.mediaDevices.getDisplayMedia({
+          video: { cursor: "always" },
+          audio: false
+        });
+        const screenTrack = display.getVideoTracks()[0];
+        if (!screenTrack) throw new Error("Sem track de vídeo da tela");
+
+        screenStream = display;
+        const ok = await replaceVideoTrack(screenTrack);
+        if (!ok) {
+          display.getTracks().forEach(t => t.stop());
+          throw new Error("Não foi possível enviar a tela nesta chamada.");
+        }
+
+        if (localVideo) {
+          const preview = new MediaStream([screenTrack]);
+          if (localStream) {
+            localStream.getAudioTracks().forEach(t => preview.addTrack(t));
+          }
+          localVideo.srcObject = preview;
+        }
+
+        sharingScreen = true;
+        callIsVideo = true;
+        if (callOverlay) callOverlay.classList.remove("audio-only");
+        if (callStatusLabel) callStatusLabel.textContent = "Compartilhando tela";
+        updateScreenBtnLabel();
+
+        screenTrack.onended = () => {
+          stopScreenShare(true).catch(console.error);
+        };
+
+        if (conn && conn.open) {
+          try { conn.send(JSON.stringify({ type: "screen-start" })); } catch (e) {}
+        }
+        renderSystemMessage("Você está compartilhando a tela", true);
+      } catch (e) {
+        console.error(e);
+        if (e.name !== "NotAllowedError") {
+          alert("Não foi possível compartilhar a tela.\n" + (e.message || e));
+        }
+      }
+    }
+
+    async function stopScreenShare(restoreCamera) {
+      if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+        screenStream = null;
+      }
+      sharingScreen = false;
+      updateScreenBtnLabel();
+
+      if (restoreCamera && currentCall) {
+        try {
+          const cam = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "user" },
+            audio: false
+          });
+          const camTrack = cam.getVideoTracks()[0];
+          await replaceVideoTrack(camTrack);
+          if (localStream) {
+            localStream.getVideoTracks().forEach(t => {
+              localStream.removeTrack(t);
+              t.stop();
+            });
+            localStream.addTrack(camTrack);
+            if (localVideo) localVideo.srcObject = localStream;
+          } else {
+            localStream = cam;
+            if (localVideo) localVideo.srcObject = cam;
+          }
+          cameraStream = cam;
+          if (callStatusLabel) callStatusLabel.textContent = "Em chamada de vídeo";
+          if (callOverlay) callOverlay.classList.remove("audio-only");
+        } catch (e) {
+          if (callStatusLabel) callStatusLabel.textContent = "Em chamada (sem câmera)";
+          renderSystemMessage("Partilha de tela encerrada", true);
+        }
+      }
+      if (conn && conn.open) {
+        try { conn.send(JSON.stringify({ type: "screen-stop" })); } catch (e) {}
+      }
+    }
+
+    async function startCall(mode) {
+      if (!peer || !myId) { alert("Aguarde o seu ID ficar pronto."); return; }
+      const remoteId = (peerIdInput && peerIdInput.value.trim()) || getSavedPeer();
+      if (!remoteId) { alert("Conecte com o amigo antes de ligar."); return; }
+      if (currentCall) { alert("Já existe uma chamada em andamento."); return; }
+
+      const hasVideo = mode === "video" || mode === "screen";
+      const label = mode === "screen" ? "Compartilhamento de tela" : (mode === "video" ? "Chamada de vídeo" : "Chamada de voz");
+
+      try {
+        localStream = await getMedia(mode);
+        if (mode === "screen") sharingScreen = true;
+        if (localVideo) localVideo.srcObject = localStream;
+        showCallUI(hasVideo, "Chamando " + remoteId + "…");
+
+        currentCall = peer.call(remoteId, localStream, {
+          metadata: { video: hasVideo, screen: mode === "screen", from: myId }
+        });
+
+        if (!currentCall) {
+          endCall(false);
+          renderSystemMessage("Não foi possível iniciar a chamada. Verifique a conexão.", true);
+          return;
+        }
+
+        currentCall.on("stream", (remoteStream) => {
+          if (remoteVideo) remoteVideo.srcObject = remoteStream;
+          if (callStatusLabel) {
+            callStatusLabel.textContent = mode === "screen" ? "Compartilhando tela" : (mode === "video" ? "Em chamada de vídeo" : "Em chamada de voz");
+          }
+          playNotificationSound();
+        });
+
+        currentCall.on("close", () => endCall(false));
+        currentCall.on("error", (err) => {
+          console.error("Call error", err);
+          renderSystemMessage("Erro na chamada: " + (err.message || err), true);
+          endCall(false);
+        });
+
+        if (conn && conn.open) {
+          try {
+            conn.send(JSON.stringify({ type: "call-invite", video: hasVideo, screen: mode === "screen", from: myId }));
+          } catch (e) {}
+        }
+
+        renderSystemMessage(label + " para " + remoteId + "…", true);
+      } catch (e) {
+        console.error(e);
+        stopLocalStream();
+        hideCallUI();
+        if (e.name === "NotAllowedError") {
+          alert("Permissão negada. Permita microfone/câmera/tela nas configurações do navegador.");
+        } else {
+          alert("Não foi possível iniciar.\n" + (e.message || e));
+        }
+      }
+    }
+
+    function setupIncomingCall(call) {
+      pendingCall = call;
+      const meta = call.metadata || {};
+      const isScreen = !!meta.screen;
+      const isVideo = meta.video !== false || isScreen;
+      const from = meta.from || call.peer;
+
+      if (incomingTitle) incomingTitle.textContent = isScreen ? "🖥️ Compartilhamento de tela" : (isVideo ? "📹 Chamada de vídeo" : "📞 Chamada de voz");
+      if (incomingDesc) incomingDesc.textContent = "de " + from;
+      if (incomingCallEl) incomingCallEl.classList.add("active");
+      
+      const callLabel = isScreen ? "Compartilhamento de tela" : (isVideo ? "Chamada de vídeo" : "Chamada de voz");
+      notifyIfBackground(callLabel, "de " + from, "call");
+
+      call.on("close", () => {
+        if (pendingCall === call) {
+          hideCallUI();
+          renderSystemMessage("Chamada cancelada pelo outro lado", true);
+        }
+      });
+    }
+
+    async function acceptCall() {
+      if (!pendingCall) return;
+      const call = pendingCall;
+      const meta = call.metadata || {};
+      const isScreen = !!meta.screen;
+      const isVideo = meta.video !== false || isScreen;
+
+      try {
+        localStream = await getMedia(isVideo ? "video" : "audio");
+        if (localVideo) localVideo.srcObject = localStream;
+        call.answer(localStream);
+        currentCall = call;
+        pendingCall = null;
+        if (incomingCallEl) incomingCallEl.classList.remove("active");
+        showCallUI(isVideo, isScreen ? "Recebendo tela do amigo" : (isVideo ? "Em chamada de vídeo" : "Em chamada de voz"));
+
+        call.on("stream", (remoteStream) => {
+          if (remoteVideo) remoteVideo.srcObject = remoteStream;
+        });
+        call.on("close", () => endCall(false));
+        call.on("error", () => endCall(false));
+
+        renderSystemMessage("Chamada atendida", true);
+      } catch (e) {
+        console.error(e);
+        try { call.close(); } catch (err) {}
+        pendingCall = null;
+        hideCallUI();
+        alert("Não foi possível acessar microfone/câmera.\n" + (e.message || e));
+      }
+    }
+
+    function rejectCall() {
+      if (pendingCall) {
+        try { pendingCall.close(); } catch (e) {}
+        pendingCall = null;
+      }
+      hideCallUI();
+      if (conn && conn.open) {
+        try { conn.send(JSON.stringify({ type: "call-end" })); } catch (e) {}
+      }
+      renderSystemMessage("Chamada recusada", true);
+    }
+
+    if (voiceCallBtn) voiceCallBtn.addEventListener("click", () => startCall("audio"));
+    if (videoCallBtn) videoCallBtn.addEventListener("click", () => startCall("video"));
+    if (screenCallBtn) screenCallBtn.addEventListener("click", () => startCall("screen"));
+    if (hangupBtn) hangupBtn.addEventListener("click", () => endCall(true));
+    if (acceptCallBtn) acceptCallBtn.addEventListener("click", acceptCall);
+    if (rejectCallBtn) rejectCallBtn.addEventListener("click", rejectCall);
+
+    if (muteBtn) {
+      muteBtn.addEventListener("click", () => {
+        if (!localStream) return;
+        isMuted = !isMuted;
+        localStream.getAudioTracks().forEach(t => { t.enabled = !isMuted; });
+        muteBtn.textContent = isMuted ? "🔇" : "🎤";
+      });
+    }
+    if (camBtn) {
+      camBtn.addEventListener("click", () => {
+        if (!localStream || sharingScreen) return;
+        camOff = !camOff;
+        localStream.getVideoTracks().forEach(t => { t.enabled = !camOff; });
+        camBtn.textContent = camOff ? "🚫" : "📷";
+      });
+    }
+    if (screenBtn) {
+      screenBtn.addEventListener("click", async () => {
+        if (sharingScreen) {
+          await stopScreenShare(true);
+          renderSystemMessage("Partilha de tela encerrada", true);
+        } else {
+          await startScreenShareInCall();
+        }
+      });
+    }
+
+    // ============ Novos Controles de Visualização de Vídeo ============
+    if (btnFullscreen && videoContainer) {
+      btnFullscreen.addEventListener("click", () => {
+        if (videoContainer.requestFullscreen) {
+          videoContainer.requestFullscreen();
+        } else if (videoContainer.webkitRequestFullscreen) {
+          videoContainer.webkitRequestFullscreen();
+        }
+      });
+    }
+
+    if (btnFitMode && remoteVideo) {
+      btnFitMode.addEventListener("click", () => {
+        isFitMode = !isFitMode;
+        remoteVideo.style.objectFit = isFitMode ? "contain" : "cover";
+        btnFitMode.title = isFitMode ? "Modo Ajustar (Padrão)" : "Modo Preencher (Cortar Bordas)";
+      });
+    }
+
+    if (btnToggleCam && localVideo) {
+      btnToggleCam.addEventListener("click", () => {
+        if (localVideo.style.display === "none") {
+          localVideo.style.display = "block";
+          btnToggleCam.textContent = "📷";
+          btnToggleCam.title = "Ocultar Câmera Local";
+        } else {
+          localVideo.style.display = "none";
+          btnToggleCam.textContent = "🚫";
+          btnToggleCam.title = "Mostrar Câmera Local";
+        }
+      });
+    }
+
+    // ============ PeerJS + Reconexão inteligente ============
+    function getSavedPeer() {
+      try { return localStorage.getItem(LAST_PEER_KEY) || ""; } catch (e) { return ""; }
+    }
+    function savePeer(id) {
+      try {
+        if (id) localStorage.setItem(LAST_PEER_KEY, id);
+        else localStorage.removeItem(LAST_PEER_KEY);
+      } catch (e) {}
+    }
+    function saveMyPreferredId(id) {
+      try { if (id) localStorage.setItem(LAST_MY_ID_KEY, id); } catch (e) {}
+    }
+    function getPreferredId() {
+      try { return localStorage.getItem(LAST_MY_ID_KEY) || ""; } catch (e) { return ""; }
+    }
+
+    function clearReconnectTimer() {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    }
+
+    function scheduleReconnect(reason) {
+      if (intentionalDisconnect) return;
+      const target = peerIdInput.value.trim() || getSavedPeer();
+      if (!target || target === myId) return;
+      if (reconnectAttempts >= MAX_RECONNECT) {
+        setStatus("Desconectado", "");
+        renderSystemMessage("Não foi possível reconectar automaticamente. Clique em Conectar.", true);
+        return;
+      }
+      reconnectAttempts++;
+      const delay = Math.min(1000 * reconnectAttempts, 8000);
+      setStatus("Reconectando... (" + reconnectAttempts + ")", "connecting");
+      if (reconnectAttempts === 1) renderSystemMessage((reason || "Conexão caiu") + ". Tentando reconectar…", true);
+      clearReconnectTimer();
+      reconnectTimer = setTimeout(() => { tryReconnect(target); }, delay);
+    }
+
+    function tryReconnect(targetId) {
+      if (intentionalDisconnect) return;
+      if (!peer || peer.destroyed) {
+        const preferred = getPreferredId();
+        initPeer(preferred || null, true);
+        const onOpen = () => {
+          peer.off("open", onOpen);
+          connectToPeer(targetId, true);
+        };
+        peer.on("open", onOpen);
+        return;
+      }
+      if (!peer.open) {
+        try { peer.reconnect(); } catch (e) {}
+        clearReconnectTimer();
+        reconnectTimer = setTimeout(() => tryReconnect(targetId), 1500);
+        return;
+      }
+      connectToPeer(targetId, true);
+    }
+
+    function connectToPeer(id, isAuto) {
+      if (!id || !peer) return;
+      if (id === myId) return;
+      if (conn && conn.open && conn.peer === id) return;
+
+      if (conn) {
+        try { conn.close(); } catch (e) {}
+        conn = null;
+      }
+
+      if (!isAuto) {
+        intentionalDisconnect = false;
+        reconnectAttempts = 0;
+        clearReconnectTimer();
+      }
+
+      setStatus(isAuto ? "Reconectando..." : "Conectando...", "connecting");
+      try {
+        const connection = peer.connect(id, { reliable: true });
+        setupConnection(connection);
+      } catch (e) {
+        console.error(e);
+        if (isAuto) scheduleReconnect("Falha ao reconectar");
+        else renderSystemMessage("Erro ao conectar: " + e.message, true);
+      }
+    }
+
+    function destroyPeer() {
+      clearReconnectTimer();
+      if (conn) {
+        try { conn.close(); } catch (e) {}
+        conn = null;
+      }
+      if (peer) {
+        try { peer.destroy(); } catch (e) {}
+        peer = null;
+      }
+      enableChat(false);
+      setConnectedUI(false);
+    }
+
+    function initPeer(customId = null, silent = false) {
+      destroyPeer();
+      const options = { debug: 1 };
+      peer = customId ? new Peer(customId, options) : new Peer(options);
+
+      peer.on("open", id => {
+        myId = id;
+        myIdEl.textContent = id;
+        if (customId) saveMyPreferredId(customId);
+        generateQR(id);
+
+        if (!silent) {
+          setStatus("Aguardando conexão", "");
+          renderSystemMessage(customId ? `ID definido como "${id}". Compartilhe o link ou o QR Code.` : "ID gerado. Você pode personalizar acima.", true);
+        } else {
+          setStatus("Aguardando conexão", "");
+        }
+
+        const last = getSavedPeer();
+        if (last && last !== id && !intentionalDisconnect) {
+          peerIdInput.value = last;
+          if (!silent) renderSystemMessage("Último amigo lembrado: " + last + ". Reconectando…", true);
+          setTimeout(() => connectToPeer(last, true), 600);
+        }
+      });
+
+      peer.on("connection", incoming => {
+        if (conn && conn.open) {
+          try { incoming.close(); } catch (e) {}
+          return;
+        }
+        intentionalDisconnect = false;
+        reconnectAttempts = 0;
+        clearReconnectTimer();
+        setupConnection(incoming);
+        peerIdInput.value = incoming.peer;
+        savePeer(incoming.peer);
+        setConnectedUI(true);
+      });
+
+      peer.on("call", (call) => {
+        if (currentCall) {
+          try { call.close(); } catch (e) {}
+          return;
+        }
+        setupIncomingCall(call);
+      });
+
+      peer.on("error", err => {
+        console.error(err);
+        if (err.type === "unavailable-id") {
+          renderSystemMessage(`O ID "${customId}" já está em uso. Escolha outro.`, true);
+          setStatus("ID em uso", "");
+          setTimeout(() => initPeer(null), 1500);
+        } else if (err.type === "peer-unavailable") {
+          setStatus("ID não encontrado", "");
+          enableChat(false);
+          if (!intentionalDisconnect) scheduleReconnect("Amigo offline ou ID indisponível");
+          else renderSystemMessage("ID do amigo não encontrado ou offline.", true);
+        } else if (err.type === "network" || err.type === "server-error" || err.type === "socket-error") {
+          setStatus("Rede instável…", "connecting");
+          if (!intentionalDisconnect) scheduleReconnect("Erro de rede (" + err.type + ")");
+        } else {
+          renderSystemMessage("Erro: " + err.type, true);
+        }
+      });
+
+      peer.on("disconnected", () => {
+        if (intentionalDisconnect) return;
+        setStatus("Reconectando ao servidor…", "connecting");
+        try { peer.reconnect(); } catch (e) {}
+        if (!conn || !conn.open) scheduleReconnect("Desconectado do servidor PeerJS");
+      });
+    }
+
+    function setupConnection(connection) {
+      conn = connection;
+      let expectingChunk = null;
+      let channelReady = false;
+
+      conn.on("open", () => {
+        intentionalDisconnect = false;
+        reconnectAttempts = 0;
+        clearReconnectTimer();
+        savePeer(conn.peer);
+        peerIdInput.value = conn.peer;
+
+        setStatus("Conectado", "online");
+        enableChat(true);
+        setConnectedUI(true);
+        renderSystemMessage("Conectado com " + conn.peer, true);
+
+        try { conn.send(JSON.stringify({ type: "hello", from: myId })); } catch (e) {}
+
+        setTimeout(() => {
+          if (conn && conn.open && !channelReady) {
+            channelReady = true;
+            renderSystemMessage("Canal de mensagens pronto. Pode conversar!", true);
+          }
+        }, 400);
+      });
+
+      conn.on("data", data => {
+        if (typeof data === "string") {
+          try {
+            const parsed = JSON.parse(data);
+
+            if (parsed.type === "hello") {
+              channelReady = true;
+              try {
+                if (conn && conn.open) conn.send(JSON.stringify({ type: "hello-ack", from: myId }));
+              } catch (e) {}
+              return;
+            }
+            if (parsed.type === "hello-ack") { channelReady = true; return; }
+
+            if (parsed.type === "typing") {
+              if (typingIndicator) {
+                typingIndicator.textContent = "digitando…";
+                clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(() => {
+                  if (typingIndicator) typingIndicator.textContent = "";
+                }, 2000);
+              }
+              return;
+            }
+
+            if (parsed.type === "msg") {
+              renderTextMessage(parsed.text, "them", nowTime(), true);
+              notifyIfBackground("Nova mensagem", parsed.text.slice(0, 80), "msg");
+              try {
+                if (conn && conn.open && parsed.id) conn.send(JSON.stringify({ type: "delivered", id: parsed.id }));
+              } catch (e) {}
+              return;
+            }
+
+            if (parsed.type === "delivered") { markDelivered(parsed.id); return; }
+            if (parsed.type === "call-end") {
+              if (currentCall || pendingCall || (callOverlay && callOverlay.classList.contains("active"))) endCall(false);
+              return;
+            }
+
+            if (parsed.type === "call-invite") {
+              const label = parsed.screen ? "Compartilhamento de tela" : (parsed.video ? "Chamada de vídeo" : "Chamada de voz");
+              renderSystemMessage(label + " recebida…", true);
+              return;
+            }
+
+            if (parsed.type === "screen-start") {
+              if (callStatusLabel && callOverlay && callOverlay.classList.contains("active")) {
+                callStatusLabel.textContent = "Amigo está compartilhando a tela";
+              }
+              renderSystemMessage("O amigo começou a compartilhar a tela", true);
+              return;
+            }
+
+            if (parsed.type === "screen-stop") {
+              if (callStatusLabel && callOverlay && callOverlay.classList.contains("active")) {
+                callStatusLabel.textContent = "Em chamada de vídeo";
+              }
+              renderSystemMessage("O amigo parou de compartilhar a tela", true);
+              return;
+            }
+
+            if (parsed.type === "file-meta") {
+              const progress = createProgressMessage("them", parsed.name, parsed.size);
+              incomingFiles.set(parsed.id, { meta: parsed, chunks: new Array(parsed.totalChunks), received: 0, progress });
+              return;
+            }
+
+            if (parsed.type === "file-chunk-info") {
+              expectingChunk = { id: parsed.id, index: parsed.index };
+              return;
+            }
+
+            renderTextMessage(data, "them", nowTime(), true);
+            notifyIfBackground("Nova mensagem", String(data).slice(0, 80), "msg");
+          } catch (e) {
+            renderTextMessage(data, "them", nowTime(), true);
+            notifyIfBackground("Nova mensagem", String(data).slice(0, 80), "msg");
+          }
+        } else if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+          if (!expectingChunk) return;
+          const entry = incomingFiles.get(expectingChunk.id);
+          if (!entry) return;
+
+          entry.chunks[expectingChunk.index] = data;
+          entry.received += data.byteLength || data.length;
+          updateProgress(entry.progress, entry.received, entry.meta.size);
+
+          if (entry.received >= entry.meta.size) {
+            const blob = new Blob(entry.chunks, { type: entry.meta.mime });
+            const url = URL.createObjectURL(blob);
+            const fileObj = { name: entry.meta.name, blob, url, size: entry.meta.size, mime: entry.meta.mime };
+            sessionFiles.push({ name: fileObj.name, url: fileObj.url, size: fileObj.size, direction: "in" });
+            finalizeFileMessage(entry.progress, fileObj, "them");
+            updateFilesList();
+            notifyIfBackground("Arquivo recebido", entry.meta.name || "Novo arquivo", "file");
+            incomingFiles.delete(expectingChunk.id);
+          }
+          expectingChunk = null;
+        }
+      });
+
+      conn.on("close", () => {
+        enableChat(false);
+        setConnectedUI(false);
+        conn = null;
+        if (intentionalDisconnect) {
+          setStatus("Desconectado", "");
+          renderSystemMessage("Conexão encerrada", true);
+        } else {
+          scheduleReconnect("Conexão encerrada inesperadamente");
+        }
+      });
+
+      conn.on("error", err => {
+        console.error(err);
+        renderSystemMessage("Erro na conexão: " + err, true);
+        if (!intentionalDisconnect) scheduleReconnect("Erro no canal de dados");
+      });
+    }
+
+    function setConnectedUI(connected) {
+      connectBtn.classList.toggle("hidden", connected);
+      disconnectBtn.classList.toggle("hidden", !connected);
+      peerIdInput.disabled = connected;
+    }
+
+    // ============ Ações ============
+    setIdBtn.addEventListener("click", () => {
+      const desired = customIdInput.value.trim();
+      if (!desired) return alert("Digite um ID");
+      if (!/^[a-zA-Z0-9_-]{3,30}$/.test(desired)) {
+        alert("ID inválido. Use 3 a 30 caracteres: letras, números, hífen ou underline.");
+        return;
+      }
+      if (desired === myId) return alert("Esse já é o seu ID atual");
+      if (conn && conn.open) { alert("Desconecte antes de trocar o ID."); return; }
+      renderSystemMessage(`Tentando definir ID como "${desired}"...`, true);
+      initPeer(desired);
+    });
+
+    connectBtn.addEventListener("click", () => {
+      const id = peerIdInput.value.trim();
+      if (!id) return alert("Cole o ID do amigo");
+      if (id === myId) return alert("Esse é o seu próprio ID");
+      intentionalDisconnect = false;
+      reconnectAttempts = 0;
+      clearReconnectTimer();
+      savePeer(id);
+      connectToPeer(id, false);
+    });
+
+    disconnectBtn.addEventListener("click", () => {
+      intentionalDisconnect = true;
+      reconnectAttempts = 0;
+      clearReconnectTimer();
+      savePeer("");
+      endCall(true);
+      if (conn) {
+        try { conn.close(); } catch (e) {}
+        conn = null;
+      }
+      setConnectedUI(false);
+      enableChat(false);
+      setStatus("Desconectado", "");
+      renderSystemMessage("Desconectado por você. Reconexão automática desligada.", true);
+    });
+
+    window.addEventListener("online", () => {
+      if (intentionalDisconnect) return;
+      if (conn && conn.open) return;
+      const target = peerIdInput.value.trim() || getSavedPeer();
+      if (target) {
+        reconnectAttempts = Math.min(reconnectAttempts, 2);
+        scheduleReconnect("Internet voltou");
+      }
+    });
+
+    copyIdBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(myId);
+        copyIdBtn.textContent = "Copiado!";
+        setTimeout(() => copyIdBtn.textContent = "Copiar ID", 1500);
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = myId;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        copyIdBtn.textContent = "Copiado!";
+        setTimeout(() => copyIdBtn.textContent = "Copiar ID", 1500);
+      }
+    });
+
+    copyLinkBtn.addEventListener("click", async () => {
+      const link = getShareUrl();
+      try {
+        await navigator.clipboard.writeText(link);
+        copyLinkBtn.textContent = "Link copiado!";
+        setTimeout(() => copyLinkBtn.textContent = "Copiar link", 1500);
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = link;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        copyLinkBtn.textContent = "Link copiado!";
+        setTimeout(() => copyLinkBtn.textContent = "Copiar link", 1500);
+      }
+    });
+
+    clearHistoryBtn.addEventListener("click", clearHistory);
+
+    function sendText() {
+      const text = textInput.value.trim();
+      if (!text) return;
+      if (!conn || !conn.open) {
+        renderSystemMessage("Não está conectado. Conecte de novo.", true);
+        return;
+      }
+      try {
+        const msgId = "m_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+        conn.send(JSON.stringify({ type: "msg", id: msgId, text }));
+        renderTextMessage(text, "me", nowTime(), true, "✓", msgId);
+        textInput.value = "";
+        textInput.style.height = "auto";
+      } catch (e) {
+        console.error(e);
+        renderSystemMessage("Falha ao enviar. Tente desconectar e conectar de novo.", true);
+      }
+    }
+
+    sendBtn.addEventListener("click", sendText);
+    textInput.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendText();
+      }
+    });
+
+    textInput.addEventListener("input", () => {
+      textInput.style.height = "auto";
+      textInput.style.height = Math.min(textInput.scrollHeight, 140) + "px";
+      if (conn && conn.open) {
+        const now = Date.now();
+        if (now - lastTypingSent > 1200) {
+          lastTypingSent = now;
+          try { conn.send(JSON.stringify({ type: "typing" })); } catch (e) {}
+        }
+      }
+    });
+
+    fileInput.addEventListener("change", async () => {
+      const files = Array.from(fileInput.files || []);
+      fileInput.value = "";
+      for (const file of files) {
+        await sendFile(file);
+      }
+    });
+
+    // ============ Drag & Drop ============
+    let dragCounter = 0;
+    function isFileDrag(e) {
+      return e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.includes("Files");
+    }
+
+    messagesEl.addEventListener("dragenter", (e) => {
+      e.preventDefault();
+      if (!isFileDrag(e) || !conn || !conn.open) return;
+      dragCounter++;
+      messagesEl.classList.add("drag-over");
+      dropOverlay.classList.add("visible");
+    });
+
+    messagesEl.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        messagesEl.classList.remove("drag-over");
+        dropOverlay.classList.remove("visible");
+      }
+    });
+
+    messagesEl.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (isFileDrag(e) && conn && conn.open) e.dataTransfer.dropEffect = "copy";
+    });
+
+    messagesEl.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      messagesEl.classList.remove("drag-over");
+      dropOverlay.classList.remove("visible");
+
+      if (!conn || !conn.open) {
+        renderSystemMessage("Conecte-se primeiro para enviar arquivos", true);
+        return;
+      }
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        (async () => {
+          for (const f of files) {
+            await sendFile(f);
+          }
+        })();
+      }
+    });
+
+    // ============ Iniciar ============
+    function checkUrlParams() {
+      const params = new URLSearchParams(window.location.search);
+      const peerFromUrl = params.get("peer");
+      if (peerFromUrl) {
+        peerIdInput.value = peerFromUrl;
+        renderSystemMessage(`ID do amigo detectado no link: ${peerFromUrl}. Clique em Conectar.`, true);
+      }
+    }
+
+    loadHistory();
+    const preferred = getPreferredId();
+    if (preferred && customIdInput) customIdInput.value = preferred;
+    initPeer(preferred || null);
+    checkUrlParams();
+    const lastPeer = getSavedPeer();
+    if (lastPeer && peerIdInput && !peerIdInput.value) {
+      peerIdInput.value = lastPeer;
+    }
+
+    // ============ Service Worker (PWA) ============
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js")
+          .then((reg) => {
+            console.log("Service Worker registrado:", reg.scope);
+            reg.addEventListener("updatefound", () => {
+              const nw = reg.installing;
+              if (!nw) return;
+              nw.addEventListener("statechange", () => {
+                if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                  renderSystemMessage("Nova versão disponível. Feche e abra o app (ou recarregue) para atualizar.", true);
+                }
+              });
+            });
+          })
+          .catch((err) => console.log("Erro no SW:", err));
+      });
+    }
+  </script>
+</body>
+</html>
